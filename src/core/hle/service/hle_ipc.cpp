@@ -45,8 +45,9 @@ bool SessionRequestManager::HasSessionRequestHandler(const HLERequestContext& co
         const auto& message_header = context.GetDomainMessageHeader();
         const auto object_id = message_header.object_id;
 
-        if (object_id > DomainHandlerCount()) {
-            LOG_CRITICAL(IPC, "object_id {} is too big!", object_id);
+        if (object_id == 0 || object_id > DomainHandlerCount()) {
+            LOG_ERROR(IPC, "Invalid domain object_id {}, handler_count={}", object_id,
+                      DomainHandlerCount());
             return false;
         }
         return !DomainHandler(object_id - 1).expired();
@@ -69,9 +70,13 @@ Result SessionRequestManager::CompleteSyncRequest(Kernel::KServerSession* server
             result = this->SessionHandler().HandleSyncRequest(*server_session, context);
         }
     } else {
-        ASSERT_MSG(false, "Session handler is invalid, stubbing response!");
+        LOG_ERROR(IPC, "Invalid session handler: session={}, pid={}, command={}, object_id={}",
+                  server_session->GetId(), context.GetPID(), context.GetCommand(),
+                  context.HasDomainMessageHeader() ?
+                      static_cast<u32>(context.GetDomainMessageHeader().object_id) : 0);
         IPC::ResponseBuilder rb(context, 2);
-        rb.Push(ResultSuccess);
+        rb.Push(IPC::ResultSessionClosed);
+        R_TRY(context.WriteToOutgoingCommandBuffer());
     }
 
     if (convert_to_domain) {
@@ -119,7 +124,7 @@ Result SessionRequestManager::HandleDomainSyncRequest(Kernel::KServerSession* se
 
         IPC::ResponseBuilder rb{context, 2};
         rb.Push(ResultSuccess);
-        return ResultSuccess;
+        return context.WriteToOutgoingCommandBuffer();
     }
     }
 
@@ -295,6 +300,8 @@ Result HLERequestContext::WriteToOutgoingCommandBuffer() {
 
     if (GetManager()->IsDomain()) {
         current_offset = domain_offset - static_cast<u32>(outgoing_domain_objects.size());
+        ASSERT(current_offset >= data_payload_offset + 2);
+        ASSERT(current_offset + outgoing_domain_objects.size() == write_size);
         for (auto& object : outgoing_domain_objects) {
             if (object) {
                 GetManager()->AppendDomainHandler(std::move(object));

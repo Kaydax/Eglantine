@@ -57,7 +57,7 @@ struct ResponseBuilder {
             num_domain_objects = num_objects_to_move;
         }
 
-        if (mgr->IsDomain()) {
+        if (mgr->IsDomain() && ctx.HasDomainMessageHeader()) {
             raw_data_size += u32(sizeof(DomainMessageHeader) / sizeof(u32) + num_domain_objects);
             ctx.write_size += num_domain_objects;
         }
@@ -65,7 +65,7 @@ struct ResponseBuilder {
         if (ctx.IsTipc()) {
             header.type.Assign(ctx.GetCommandType());
         } else {
-            raw_data_size += u32(sizeof(IPC::DataPayloadHeader) / sizeof(u32) + 4 + normal_params_size);
+            raw_data_size += u32(sizeof(IPC::DataPayloadHeader) / sizeof(u32) + 4);
         }
 
         header.data_size.Assign(raw_data_size);
@@ -100,7 +100,7 @@ struct ResponseBuilder {
 
         ctx.data_payload_offset = index;
         ctx.write_size += index;
-        ctx.domain_offset = u32(index + raw_data_size / sizeof(u32));
+        ctx.domain_offset = ctx.write_size;
     }
 
     inline void Skip(u32 size_in_words, bool set_to_null) {

@@ -1212,6 +1212,10 @@ else()
 endif()
 
 target_include_directories(core PRIVATE ${OPUS_INCLUDE_DIRS})
+if (MINGW AND CXX_CLANG)
+    # Keep host TLS lookups from being cached across migrating fiber calls by LTO.
+    set_property(SOURCE hle/kernel/kernel.cpp APPEND PROPERTY COMPILE_OPTIONS -fno-lto)
+endif()
 target_link_libraries(core PUBLIC common PRIVATE audio_core hid_core network video_core nx_tzdb tz)
 if (MSVC)
     target_link_libraries(core PRIVATE getopt)
